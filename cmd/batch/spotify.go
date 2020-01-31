@@ -160,7 +160,7 @@ func appendSongs(client *spotify.Client, from, to spotify.ID) error {
 			RangeStart:   len(tpl.Tracks.Tracks),
 			RangeLength:  len(toAdd),
 			InsertBefore: 0,
-			SnapshotID: snapList,
+			SnapshotID:   snapList,
 		}); err != nil {
 			return err
 		}
@@ -168,7 +168,7 @@ func appendSongs(client *spotify.Client, from, to spotify.ID) error {
 	return nil
 }
 
-func main() {
+func main2() {
 	tok, err := cacheOrGetNewToken()
 	if err != nil {
 		log.Fatalf("Couldn't get spotify token: %s\n", err.Error())
