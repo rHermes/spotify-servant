@@ -1,0 +1,5 @@
+cron:
+  - description: "Trigger batch refresh run"
+    url: /
+    schedule: every day 00:00
+    target: batch

@@ -7,6 +7,7 @@
 #   $ gcloud topic gcloudignore
 #
 .gcloudignore
+.secrets
 # If you would like to upload your .git directory, .gitignore file or files
 # from your .gitignore file, remove the corresponding line
 # below:
@@ -23,5 +24,9 @@
 *.test
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-spotify-servant
+
 .idea
+
+spotify-servant
+cmd/batch/batch
+cmd/web/web

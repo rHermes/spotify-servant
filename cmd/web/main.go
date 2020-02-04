@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	firebase "firebase.google.com/go"
+	"firebase.google.com/go/auth"
 
 	"cloud.google.com/go/datastore"
 	"github.com/go-chi/chi"
@@ -13,41 +17,139 @@ import (
 )
 
 type User struct {
+	Age         int8
 	Description string
+	K           *datastore.Key `datastore:"__key__"`
+}
+
+func getIdTokenFromBody(r *http.Request) (string, error) {
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r.Body); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func sessionLoginHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	fa := ctx.Value("firebase_auth").(*auth.Client)
+
+	idToken, err := getIdTokenFromBody(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	decoded, err := fa.VerifyIDToken(ctx, idToken)
+	if err != nil {
+		http.Error(w, "Invalid ID token", http.StatusUnauthorized)
+		return
+	}
+
+	if time.Now().Unix()-decoded.AuthTime > 5*60 {
+		http.Error(w, "Recent sign-in required", http.StatusUnauthorized)
+		return
+	}
+
+	expiresIn := time.Hour * 24 * 5
+	cookie, err := fa.SessionCookie(ctx, idToken, expiresIn)
+	if err != nil {
+		http.Error(w, "Failed to create a session cookie", http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    cookie,
+		MaxAge:   int(expiresIn.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+	})
+
+	//pr := repr.New(w)
+	//pr.Println(decoded)
+}
+
+func loginPageHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	t := GetTemplateFromCtx(ctx, LoginTemplateName)
+
+	bctx := TemplateBaseCtx{
+		Firebase: ctx.Value("firebase_cfg").(FirebaseConfig),
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, bctx); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	dc := r.Context().Value("datastore_client").(*datastore.Client)
+	ctx := r.Context()
+	dc := ctx.Value("datastore_client").(*datastore.Client)
 	dc = dc
-	fmt.Fprint(w, "Hello, World!")
+
+	t := GetTemplateFromCtx(ctx, IndexTemplateName)
+
+	bctx := TemplateBaseCtx{
+		Firebase: ctx.Value("firebase_cfg").(FirebaseConfig),
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, bctx); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 func main() {
-
 	ctx := context.Background()
 
-	client, err := datastore.NewClient(ctx, datastore.DetectProjectID)
+	// We need to get a firebase app asswell
+	app, err := firebase.NewApp(ctx, nil)
+	if err != nil {
+		log.Fatalf("We where not able to get a firebase app: %s\n", err.Error())
+	}
+	auth, err := app.Auth(ctx)
+	if err != nil {
+		log.Fatalf("Couldn't get authentication: %s\n", err.Error())
+	}
+
+	// Create firebase config
+	fireCfg := FirebaseConfig{
+		ApiKey:            os.Getenv("FIREBASE_API_KEY"),
+		AuthDomain:        os.Getenv("FIREBASE_AUTH_DOMAIN"),
+		DatabaseURL:       os.Getenv("FIREBASE_DB_URL"),
+		ProjectID:         os.Getenv("FIREBASE_PROJECT_ID"),
+		StorageBucket:     os.Getenv("FIREBASE_STORAGE_BUCKET"),
+		MessagingSenderID: os.Getenv("FIREBASE_MESSAGING_SENDER_ID"),
+		AppID:             os.Getenv("FIREBASE_APP_ID"),
+		MeasurementID:     os.Getenv("FIREBASE_MEASUREMENT_ID"),
+	}
+
+	// This is because there is a bug in the
+	// https://github.com/googleapis/google-cloud-go/issues/1751
+	projectID := datastore.DetectProjectID
+	if os.Getenv("RUN_WITH_DEVAPPSERVER") == "1" {
+		projectID = "asdsad"
+	}
+
+	client, err := datastore.NewClient(ctx, projectID)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer client.Close()
 
-	kind := "User"
-	name := "sampleUser"
-	userKey := datastore.NameKey(kind, name, nil)
-
-	user := User{
-		Description: "This is a dummy user",
-	}
-
-	if _, err := client.Put(ctx, userKey, &user); err != nil {
-		log.Fatalf("Failed to save task: %v\n", err)
-	}
-
 	r := chi.NewRouter()
 	r.Use(middleware.WithValue("datastore_client", client))
+	r.Use(middleware.WithValue("firebase_auth", auth))
+	r.Use(middleware.WithValue("firebase_cfg", fireCfg))
+	r.Use(TemplateMiddleware)
 
 	r.Get("/", indexHandler)
+	r.Get("/login", loginPageHandler)
+	r.Post("/sessionLogin", sessionLoginHandler)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

@@ -1,0 +1,4 @@
+#runtime: go113
+runtime: go111
+service: batch
+main: ./cmd/batch

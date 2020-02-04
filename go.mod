@@ -5,6 +5,8 @@ go 1.13
 require (
 	cloud.google.com/go v0.52.0 // indirect
 	cloud.google.com/go/datastore v1.0.0
+	cloud.google.com/go/firestore v1.1.1 // indirect
+	firebase.google.com/go v3.12.0+incompatible
 	github.com/go-chi/chi v4.0.3+incompatible
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.3.3 // indirect
