@@ -22,6 +22,7 @@ type FirebaseConfig struct {
 	AppID             string
 	MeasurementID     string
 }
+
 type TemplateBaseCtx struct {
 	Firebase FirebaseConfig
 }
@@ -53,6 +54,7 @@ func GetTemplateFromCtx(ctx context.Context, name string) *template.Template {
 	return tmpl
 }
 
+// language=gohtml
 const LayoutTemplateSource = `<!doctype html>
 <html lang="en">
 <head>
@@ -81,15 +83,19 @@ const LayoutTemplateSource = `<!doctype html>
 </body>
 </html>`
 
+// language=gohtml
 const IndexTemplateSource = `{{define "root"}}
     <h2>
         This is the index template.
     </h2>
-    
-    
+
+
     <a href="/login">Log in</a>
+    <a href="/logout">Log out</a>
+    <a href="/profile">Profile</a>
 {{end}}`
 
+// language="gohtml"
 const LoginTemplateSource = `{{define "stylesheet-include"}}
  <link type="text/css" rel="stylesheet" href="https://cdn.firebase.com/libs/firebaseui/3.5.2/firebaseui.css" />
 {{end}}
@@ -111,6 +117,8 @@ const LoginTemplateSource = `{{define "stylesheet-include"}}
     <script src="/static/js/login.js"></script>
 {{end}}`
 
+
+// language=gohtml
 const FirebaseScriptSource = `{{define "firebase-init"}}
 <script>
   // Your web app's Firebase configuration

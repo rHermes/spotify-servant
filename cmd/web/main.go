@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"github.com/alecthomas/repr"
 	"log"
 	"net/http"
 	"os"
@@ -29,6 +30,40 @@ func getIdTokenFromBody(r *http.Request) (string, error) {
 	}
 	return buf.String(), nil
 }
+
+
+// MustAuthMiddleware ensures that the user is authenticated using the
+// session token, if not it redirects to login
+func MustAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		fa := ctx.Value("firebase_auth").(*auth.Client)
+
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			if err != http.ErrNoCookie {
+				http.Error(w, "Internal Problem", http.StatusInternalServerError)
+				return
+			}
+			// TODO(rHermes): Add a "destination url" here to redirect after login
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		// decoded, err := fa.VerifySessionCookieAndCheckRevoked(ctx, cookie.Value)
+		decoded, err := fa.VerifySessionCookie(ctx, cookie.Value)
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+
+		// Here we apply the
+		ctx = context.WithValue(ctx,"sess_decoded", decoded)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 
 func sessionLoginHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -82,6 +117,25 @@ func loginPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf.WriteTo(w)
+}
+
+func logoutPageHandler(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name: "session",
+		Value: "",
+		MaxAge: 0,
+	})
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func profilePageHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	decoded := ctx.Value("sess_decoded").(*auth.Token)
+
+	pr := repr.New(w)
+	pr.Println(decoded)
+
+	// fmt.Fprintf(w, "You have uid: %s\n", decoded.UID)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +202,14 @@ func main() {
 
 	r.Get("/", indexHandler)
 	r.Get("/login", loginPageHandler)
+	r.Get("/logout", logoutPageHandler)
 	r.Post("/sessionLogin", sessionLoginHandler)
+
+	r.Route("/profile", func(r chi.Router) {
+		r.Use(MustAuthMiddleware)
+
+		r.Get("/", profilePageHandler)
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
