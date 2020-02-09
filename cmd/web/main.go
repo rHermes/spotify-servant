@@ -131,11 +131,19 @@ func logoutPageHandler(w http.ResponseWriter, r *http.Request) {
 func profilePageHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	decoded := ctx.Value("sess_decoded").(*auth.Token)
+	repr.Println(decoded)
 
-	pr := repr.New(w)
-	pr.Println(decoded)
+	t := GetTemplateFromCtx(ctx, ProfileIndexTemplateName)
 
-	// fmt.Fprintf(w, "You have uid: %s\n", decoded.UID)
+	bctx := TemplateBaseCtx{
+		Firebase: ctx.Value("firebase_cfg").(FirebaseConfig),
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, bctx); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {

@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	IndexTemplateName = "__ctx__tmpl_index"
-	LoginTemplateName = "__ctx__tmpl_login"
+	IndexTemplateName        = "__ctx__tmpl_index"
+	LoginTemplateName        = "__ctx__tmpl_login"
+	ProfileIndexTemplateName = "__ctx__tmpl_profile_index"
 )
 
 // FirebaseConfig is needed for the firebase scripts
@@ -35,11 +36,13 @@ func TemplateMiddleware(next http.Handler) http.Handler {
 	layoutTmpl := template.Must(template.Must(baseTmpl.Clone()).Parse(LayoutTemplateSource))
 	indexTmpl := template.Must(template.Must(layoutTmpl.Clone()).Parse(IndexTemplateSource))
 	loginTmpl := template.Must(template.Must(layoutTmpl.Clone()).Parse(LoginTemplateSource))
+	profileIndexTmpl := template.Must(template.Must(layoutTmpl.Clone()).Parse(ProfileIndexTemplateSource))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, IndexTemplateName, indexTmpl)
 		ctx = context.WithValue(ctx, LoginTemplateName, loginTmpl)
+		ctx = context.WithValue(ctx, ProfileIndexTemplateName, profileIndexTmpl)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -117,7 +120,6 @@ const LoginTemplateSource = `{{define "stylesheet-include"}}
     <script src="/static/js/login.js"></script>
 {{end}}`
 
-
 // language=gohtml
 const FirebaseScriptSource = `{{define "firebase-init"}}
 <script>
@@ -136,4 +138,9 @@ const FirebaseScriptSource = `{{define "firebase-init"}}
   firebase.initializeApp(firebaseConfig);
   firebase.analytics();
 </script>
+{{ end }}`
+
+// language=gohtml
+const ProfileIndexTemplateSource = `{{ define "root" }}
+    <h2>This is your profile</h2>
 {{ end }}`
